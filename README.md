@@ -50,6 +50,19 @@ Thanks for joining! Let's dive in.
 - Docker
 - Node.js 18+
 
+## Agent skills
+
+The skills in `.claude/skills/` are the single source of truth. To make them
+available under `.agents/skills/` without keeping duplicate files, run:
+
+```shell
+npm run setup:agent-skills
+```
+
+This creates a local directory link (a junction on Windows, a symlink elsewhere).
+The generated `.agents/skills/` link is ignored by Git. Run the command again
+after cloning or if the link is removed; it is safe to rerun.
+
 ## 💿 Sample Data
 
 This repository includes 3 sample markdown files that we'll use to test the app:
@@ -547,7 +560,10 @@ Let's create a `documents` and `document_sections` table to store our processed 
     );
     ```
 
-    You can get the project API URL from the [API settings page](https://supabase.com/dashboard/project/_/settings/api).
+    Store the project root URL here, for example
+    `https://<project-ref>.supabase.co`. The Data API page may show a REST URL
+    ending in `/rest/v1/`; do not use that value, because this trigger appends
+    `/functions/v1/process` and `/functions/v1/embed` to the project root.
 
 1.  Create a function to retrieve the URL.
 
@@ -586,7 +602,8 @@ Let's create a `documents` and `document_sections` table to store our processed 
           url := supabase_url() || '/functions/v1/process',
           headers := jsonb_build_object(
             'Content-Type', 'application/json',
-            'Authorization', current_setting('request.headers')::json->>'authorization'
+            'Authorization', current_setting('request.headers')::json->>'authorization',
+            'apikey', current_setting('request.headers')::json->>'apikey'
           ),
           body := jsonb_build_object(
             'document_id', document_id
@@ -905,7 +922,8 @@ Now let's add logic to generate embeddings automatically anytime new rows are ad
           url := supabase_url() || '/functions/v1/embed',
           headers := jsonb_build_object(
             'Content-Type', 'application/json',
-            'Authorization', current_setting('request.headers')::json->>'authorization'
+            'Authorization', current_setting('request.headers')::json->>'authorization',
+            'apikey', current_setting('request.headers')::json->>'apikey'
           ),
           body := jsonb_build_object(
             'ids', (select json_agg(ds.id) from (select id from inserted limit batch_size offset i*batch_size) ds),

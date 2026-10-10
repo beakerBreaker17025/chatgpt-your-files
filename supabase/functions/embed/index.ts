@@ -84,7 +84,15 @@ Deno.serve(async (req) => {
 
     if (error) {
       console.error(
-        `Failed to save embedding on '${table}' table with id ${id}`
+        `Failed to save embedding on '${table}' table with id ${id}`,
+        error
+      );
+      return new Response(
+        JSON.stringify({ error: 'Failed to save generated embedding' }),
+        {
+          status: 500,
+          headers: { 'Content-Type': 'application/json' },
+        }
       );
     }
 

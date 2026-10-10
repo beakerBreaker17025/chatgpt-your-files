@@ -43,11 +43,15 @@ Deno.serve(async (req) => {
 
   const { document_id } = await req.json();
 
-  const { data: document } = await supabase
+  const { data: document, error: documentError } = await supabase
     .from('documents_with_storage_path')
     .select()
     .eq('id', document_id)
     .single();
+
+  if (documentError) {
+    console.error('Failed to find uploaded document', documentError);
+  }
 
   if (!document?.storage_object_path) {
     return new Response(
@@ -59,9 +63,13 @@ Deno.serve(async (req) => {
     );
   }
 
-  const { data: file } = await supabase.storage
+  const { data: file, error: downloadError } = await supabase.storage
     .from('files')
     .download(document.storage_object_path);
+
+  if (downloadError) {
+    console.error('Failed to download storage object', downloadError);
+  }
 
   if (!file) {
     return new Response(
@@ -75,6 +83,17 @@ Deno.serve(async (req) => {
 
   const fileContents = await file.text();
   const processedMd = processMarkdown(fileContents);
+
+  if (processedMd.sections.length === 0) {
+    console.error(`No sections found for file '${document.name}'`);
+    return new Response(
+      JSON.stringify({ error: 'No Markdown sections found in uploaded file' }),
+      {
+        status: 422,
+        headers: { 'Content-Type': 'application/json' },
+      }
+    );
+  }
 
   const { error } = await supabase.from('document_sections').insert(
     processedMd.sections.map(({ content }) => ({

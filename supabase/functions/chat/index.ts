@@ -1,11 +1,10 @@
 import { createClient } from '@supabase/supabase-js';
-import { OpenAIStream, StreamingTextResponse } from 'ai';
-import { codeBlock } from 'common-tags';
-import OpenAI from 'openai';
+import { StreamingTextResponse } from 'ai';
+import { CohereClient } from '@cohere-ai/client';
 import { Database } from '../_lib/database.ts';
 
-const openai = new OpenAI({
-  apiKey: Deno.env.get('OPENAI_API_KEY'),
+const cohere = new CohereClient({
+  token: Deno.env.get('COHERE_API_KEY'),
 });
 
 // These are automatically injected
@@ -65,7 +64,6 @@ Deno.serve(async (req) => {
       embedding,
       match_threshold: 0.8,
     })
-    .select('content')
     .limit(5);
 
   if (matchError) {
@@ -82,47 +80,51 @@ Deno.serve(async (req) => {
     );
   }
 
-  const injectedDocs =
-    documents && documents.length > 0
-      ? documents.map(({ content }) => content).join('\n\n')
-      : 'No documents found';
+  const docs = documents?.map(({ content }) => ({ text: content })) || [];
 
-  console.log(injectedDocs);
+  // Cohere expects a specific chat history format
+  const chatHistory = messages.slice(0, -1).map((m: any) => ({
+    role: m.role === 'user' ? 'USER' : 'CHATBOT',
+    message: m.content,
+  }));
 
-  const completionMessages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] =
-    [
-      {
-        role: 'user',
-        content: codeBlock`
-        You're an AI assistant who answers questions about documents.
+  const userMessage = messages[messages.length - 1].content;
 
-        You're a chat bot, so keep your replies succinct.
+  try {
+    const response = await cohere.chatStream({
+      model: 'command-r-plus-08-2024',
+      message: userMessage,
+      documents: docs,
+      chatHistory: chatHistory,
+      preamble: `You're an AI assistant who answers questions about documents.
+You're a chat bot, so keep your replies succinct.
+You're only allowed to use the documents provided to answer the question.
+If the question isn't related to these documents, or if the information isn't available in the documents, say:
+"Sorry, I couldn't find any information on that."
+Do not go off topic.`,
+    });
 
-        You're only allowed to use the documents below to answer the question.
-
-        If the question isn't related to these documents, say:
-        "Sorry, I couldn't find any information on that."
-
-        If the information isn't available in the below documents, say:
-        "Sorry, I couldn't find any information on that."
-
-        Do not go off topic.
-
-        Documents:
-        ${injectedDocs}
-      `,
+    // Create a ReadableStream to convert Cohere's event stream to raw text chunks for the frontend
+    const stream = new ReadableStream({
+      async start(controller) {
+        for await (const event of response) {
+          if (event.eventType === 'text-generation') {
+            controller.enqueue(new TextEncoder().encode(event.text));
+          }
+        }
+        controller.close();
       },
-      ...messages,
-    ];
+    });
 
-  const completionStream = await openai.chat.completions.create({
-    model: 'gpt-3.5-turbo-0125',
-    messages: completionMessages,
-    max_tokens: 1024,
-    temperature: 0,
-    stream: true,
-  });
-
-  const stream = OpenAIStream(completionStream);
-  return new StreamingTextResponse(stream, { headers: corsHeaders });
+    return new StreamingTextResponse(stream, { headers: corsHeaders });
+  } catch (err) {
+    console.error(err);
+    return new Response(
+      JSON.stringify({ error: 'An error occurred while generating the response.' }),
+      {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' },
+      }
+    );
+  }
 });

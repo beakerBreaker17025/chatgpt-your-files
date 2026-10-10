@@ -21,10 +21,10 @@ create table document_sections (
   id bigint primary key generated always as identity,
   document_id bigint not null references documents (id),
   content text not null,
-  embedding vector (384)
+  embedding extensions.vector (384)
 );
 
-create index on document_sections using hnsw (embedding vector_ip_ops);
+create index on document_sections using hnsw (embedding extensions.vector_ip_ops);
 
 alter table documents enable row level security;
 alter table document_sections enable row level security;

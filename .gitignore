@@ -5,6 +5,9 @@
 /.pnp
 .pnp.js
 
+# Local link to the canonical skill collection in .claude/skills
+/.agents/skills
+
 # testing
 /coverage
 
@@ -34,3 +37,4 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+explainer.md

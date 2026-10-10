@@ -4,6 +4,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
+    "setup:agent-skills": "node scripts/link-agent-skills.js",
     "gen:types": "supabase gen types typescript --local > supabase/functions/_lib/database.ts"
   },
   "dependencies": {

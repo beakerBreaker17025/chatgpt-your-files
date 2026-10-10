@@ -1,0 +1,1 @@
+# Go to C:\Users\User\chatgpt-your-files\CLAUDE.md
